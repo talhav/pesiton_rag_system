@@ -123,3 +123,4 @@ async def query_endpoint(request: QueryRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        
