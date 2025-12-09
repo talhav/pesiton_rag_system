@@ -3,15 +3,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.15 /uv /uvx /bin/
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock README.md ./
-
-COPY src ./src
+COPY . .
 
 RUN uv sync --locked 
 
 ENV PYTHONPATH=/app/src
-
 ENV PYTHONUNBUFFERED=1
 
-
-CMD ["uv" , "run" , "src/api/main.py"]
+# Railway requires binding to dynamic $PORT
+CMD ["sh", "-c", "uv run uvicorn src.api.main:app --host 0.0.0.0 --port $PORT"]
