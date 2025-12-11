@@ -59,10 +59,18 @@ async def query_endpoint(request: QueryRequest):
         raise HTTPException(status_code=503, detail="RAG pipeline not initialized")
 
     try:
-        collection_name = os.getenv("COLLECTION_NAME")
+        # Determine collection based on type
+        if request.type == "product":
+            collection_name = os.getenv("COLLECTION_NAME")
+        elif request.type == "factory":
+            collection_name = os.getenv("FACTORY_COLLECTION_NAME")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid query type")
+
         if not collection_name:
             raise HTTPException(
-                status_code=500, detail="COLLECTION_NAME not configured"
+                status_code=500,
+                detail=f"Collection name for type '{request.type}' not configured",
             )
 
         # Retrieve relevant documents
@@ -95,23 +103,28 @@ async def query_endpoint(request: QueryRequest):
         )
 
         # Convert retrieved docs to SourceChunk models
-        sources = [
-            SourceChunk(
-                content=doc.get("description", ""),
-                metadata={
-                    "document_id": str(doc.get("_id")),
-                    **{
-                        k: v
-                        for k, v in doc.items()
-                        if k not in ["description", "_id", "score"]
-                    },
-                },
-                score=doc.get("score"),
-            )
-            for doc in retrieved_docs
-        ]
+        sources = []
+        for doc in retrieved_docs:
+            # Convert ObjectId to string for _id fields
+            doc_copy = doc.copy()
+            if "_id" in doc_copy:
+                doc_copy["_id"] = str(doc_copy["_id"])
+            if "factoryId" in doc_copy and doc_copy["factoryId"]:
+                doc_copy["factoryId"] = str(doc_copy["factoryId"])
+            if "userId" in doc_copy and doc_copy["userId"]:
+                doc_copy["userId"] = str(doc_copy["userId"])
 
-        # Build response
+            # Handle factory data if present
+            if "factory" in doc_copy and doc_copy["factory"]:
+                factory = doc_copy["factory"]
+                if "_id" in factory:
+                    factory["_id"] = str(factory["_id"])
+                if "userId" in factory and factory["userId"]:
+                    factory["userId"] = str(factory["userId"])
+
+            sources.append(SourceChunk(**doc_copy))
+
+        # Build response with type
         response = QueryResponse(
             query=request.query,
             type=request.type,
@@ -123,4 +136,3 @@ async def query_endpoint(request: QueryRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
-        
