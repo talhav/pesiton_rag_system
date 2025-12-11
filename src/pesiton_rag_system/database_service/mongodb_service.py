@@ -22,18 +22,28 @@ class MongoDBService:
                     "index": "vector_index",
                     "path": "embedding",
                     "queryVector": query_vector,
-                    "numCandidates": number_of_candiates,  # ANN used here to check with k*10 candidates and the limit is used to return top_k results. Increase this value if recall is low.
+                    "numCandidates": number_of_candiates,
                     "limit": top_k,
                 }
             },
+            {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
             {
-                # What fields to return - customize as needed
+                "$lookup": {
+                    "from": "factories",  # Name of your factory collection
+                    "localField": "factoryId",  # Field in product collection
+                    "foreignField": "_id",  # Field in factory collection
+                    "as": "factory",  # Name for the joined data
+                }
+            },
+            {
+                "$unwind": {
+                    "path": "$factory",
+                    "preserveNullAndEmptyArrays": True,  # Keep products even if factory not found
+                }
+            },
+            {
                 "$project": {
-                    "_id": 1,
-                    "productName": 1,
-                    "description": 1,
-                    "modelNumber": 1,
-                    "score": {"$meta": "vectorSearchScore"},
+                    "embedding": 0  # Exclude the embedding field
                 }
             },
         ]
