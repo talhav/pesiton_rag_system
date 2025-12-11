@@ -14,4 +14,5 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONUNBUFFERED=1
 
 
-CMD ["uv" , "run" , "src/api/main.py"]
+CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
