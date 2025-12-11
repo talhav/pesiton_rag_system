@@ -95,21 +95,58 @@ async def query_endpoint(request: QueryRequest):
         )
 
         # Convert retrieved docs to SourceChunk models
-        sources = [
-            SourceChunk(
-                content=doc.get("description", ""),
-                metadata={
-                    "document_id": str(doc.get("_id")),
-                    **{
-                        k: v
-                        for k, v in doc.items()
-                        if k not in ["description", "_id", "score"]
-                    },
-                },
-                score=doc.get("score"),
-            )
-            for doc in retrieved_docs
-        ]
+        sources = []
+        for doc in retrieved_docs:
+            # Convert _id to string (handles both ObjectId and string)
+            doc_id = str(doc.get("_id")) if doc.get("_id") else ""
+            
+            # Validate required fields
+            if not doc_id:
+                print(f"Warning: Document missing _id, skipping: {doc}")
+                continue
+            
+            product_name = doc.get("productName") or ""
+            description = doc.get("description") or ""
+            
+            if not product_name or not description:
+                print(f"Warning: Document {doc_id} missing required fields (productName or description), skipping")
+                print(f"Document keys: {list(doc.keys())}")
+                continue
+            
+            # Prepare the document data for SourceChunk
+            # The model expects _id as the field name (it has alias="id")
+            source_data = {
+                "_id": doc_id,
+                "productName": product_name,
+                "description": description,
+                "score": doc.get("score"),
+            }
+            
+            # Add optional fields if they exist
+            optional_fields = [
+                "factoryId", "modelNumber", "badges", "imageUrls", "colors",
+                "moq", "pricingTiers", "tradeTerms", "detailedSpecs",
+                "certifications", "usageScenarios", "status", "visibility",
+                "isPublishedToMarketplace", "createdAt", "updatedAt", "productLink"
+            ]
+            
+            for field in optional_fields:
+                if field in doc:
+                    source_data[field] = doc[field]
+            
+            # Handle factory field if it exists (it's already a dict from MongoDB lookup)
+            if "factory" in doc and doc["factory"]:
+                source_data["factory"] = doc["factory"]
+            
+            try:
+                source_chunk = SourceChunk(**source_data)
+                sources.append(source_chunk)
+            except Exception as e:
+                # Log the error with full document for debugging
+                print(f"Error creating SourceChunk for document {doc_id}: {str(e)}")
+                print(f"Document keys: {list(doc.keys())}")
+                print(f"Source data keys: {list(source_data.keys())}")
+                raise
 
         # Build response
         response = QueryResponse(
